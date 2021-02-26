@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from selenium.webdriver.common.keys import Keys
+from fake_useragent import UserAgent
+from selenium.webdriver.chrome.options import Options
 import json
 import pandas as pd
 import requests
@@ -18,7 +20,10 @@ def search_amazon():
     maxR = maxEntry.get()
     minR = minEntry.get()
     pin = PincodeEntry.get()
-
+    options=Options()
+    ua = UserAgent()
+    userAgent = ua.random
+    options.add_argument(f'user-agent={userAgent}')
     driver = webdriver.Chrome(ChromeDriverManager().install())
     driver.get('https://www.amazon.in')
     search_address = driver.find_element_by_id('glow-ingress-line2').click()
@@ -31,6 +36,12 @@ def search_amazon():
     driver.implicitly_wait(3)
     search_button = driver.find_element_by_id("nav-search-submit-text").click()
     driver.implicitly_wait(5)
+
+    # try:
+    #     num_page = driver.find_element_by_xpath('//*[@class="a-pagination"]/li[6]')
+    # except NoSuchElementException:
+    #     num_page = driver.find_element_by_class_name('a-last').click()
+    # driver.implicitly_wait(5)
 
     # SORT
     if sortBy != 'Featured':
@@ -60,21 +71,22 @@ def search_amazon():
     for i in range(int(3)):
         page_ = i + 1
         url_list.append(driver.current_url)
+        driver.implicitly_wait(5)
         click_next = driver.find_element_by_class_name('a-last').click()
-        time.sleep(2)
+        driver.implicitly_wait(1)
+        time.sleep(1)
         print("Page " + str(page_) + " grabbed")
-
     with open('search_results_urls.txt', 'w') as filehandle:
         for result_page in url_list:
             filehandle.write('%s\n' % result_page)
             print("---DONE---")
 
+    # product_data = []
     with open("search_results_urls.txt", 'r') as urllist:
         alldetails = []
         for url in urllist.read().splitlines():
             data = scrape(url)
             if data:
-                print(data)
                 for product in data['products']:
                     product['search_url'] = url
                     product['source'] = 'Amazon'
@@ -91,37 +103,27 @@ def search_amazon():
     fsearch_button = driver.find_element_by_xpath('//*[@id="container"]/div/div[1]/div[1]/div[2]/div[2]/form/div/button').click()
     driver.implicitly_wait(5)
     cur_url = driver.current_url
-
+    driver.quit()
     alldetails = []
     data = scrape(cur_url)
     if data:
         for product in data['products']:
-                    product['search_url'] = url
-                    product['source'] = 'Amazon'
-                    print("Saving Product: %s" % product['title'].encode('utf8'))
-                    alldetails.append(product)
+            product['search_url'] = url
+            product['source'] = 'Amazon'
+            print("Saving Product: %s" % product['title'].encode('utf8'))
+            alldetails.append(product)
     pd.DataFrame(alldetails)
     foutput = pd.DataFrame(alldetails)
-    foutput = foutput.head(numProd//2)
+    foutput = foutput.head(numProd // 2)
+    output = pd.concat([aoutput, foutput], ignore_index=True, sort=False)
+    output.to_excel('result.xlsx')
 
-    result=pd.concat([aoutput, foutput], ignore_index=True, sort=False)
-    result.to_excel('Result.xlsx')
-    driver.quit()
     exit(0)
-
 
 def scrape(url):
     headers = {
-        'dnt': '1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'sec-fetch-site': 'same-origin',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-user': '?1',
-        'sec-fetch-dest': 'document',
-        'referer': 'https://www.amazon.in/',
-        'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+        'User-Agent': 'My User Agent 1.0',
+        'From': 'siddheshshivgan2306@gmail.com'
     }
 
     # Download the page using requests
@@ -135,7 +137,6 @@ def scrape(url):
             print("Page %s must have been blocked by Amazon as the status code was %d" % (url, r.status_code))
         return None
     # Pass the HTML of the page and create
-    print(r)
     return e.extract(r.text)
 
 
