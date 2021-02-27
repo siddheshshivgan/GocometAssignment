@@ -27,6 +27,8 @@ def search_amazon():
     userAgent = ua.random
     options.add_argument(f'user-agent={userAgent}')
     driver = webdriver.Chrome(ChromeDriverManager().install())
+
+    # Amazon Scraping
     driver.get('https://www.amazon.in')
     search_address = driver.find_element_by_id('glow-ingress-line2').click()
     driver.implicitly_wait(1)
@@ -38,12 +40,6 @@ def search_amazon():
     driver.implicitly_wait(3)
     search_button = driver.find_element_by_id("nav-search-submit-text").click()
     time.sleep(5)
-
-    # try:
-    #     num_page = driver.find_element_by_xpath('//*[@class="a-pagination"]/li[6]')
-    # except NoSuchElementException:
-    #     num_page = driver.find_element_by_class_name('a-last').click()
-    # driver.implicitly_wait(5)
 
     # SORT
     if sortBy != 'Featured':
@@ -63,6 +59,7 @@ def search_amazon():
             time.sleep(3)
     else:
         pass
+
     # MAX-MIN
     if maxR != '0' and minR != '0':
         set_min = driver.find_element_by_id('low-price').send_keys(minR)
@@ -82,7 +79,6 @@ def search_amazon():
             filehandle.write('%s\n' % result_page)
             print("---DONE---")
 
-    # product_data = []
     with open("search_results_urls.txt", 'r') as urllist:
         alldetails = []
         for url in urllist.read().splitlines():
@@ -94,7 +90,7 @@ def search_amazon():
                         'Price': product['price'],
                         'Rating': product['rating'],
                         'Source': 'Amazon',
-                        # 'URL': 'https://www.amazon.in/'+product['url']
+                        'URL': 'https://www.amazon.in/'+product['url']
                     }
                     print("Saving Product: %s" % product['title'].encode('utf8'))
                     alldetails.append(temp)
@@ -103,7 +99,8 @@ def search_amazon():
         aoutput = aoutput.head(numProd // 2)
         aoutput.to_csv('aoutput.csv', index=False)
 
-    products, prices, ratings = [], [], []
+    # Flipkart Scraping
+    products, prices, ratings, url= [], [], [], []
     driver.get('https://www.flipkart.com/')
     close = driver.find_element_by_xpath('/html/body/div[2]/div/div/button').click()
     time.sleep(1)
@@ -113,8 +110,12 @@ def search_amazon():
         '//*[@id="container"]/div/div[1]/div[1]/div[2]/div[2]/form/div/button').click()
     time.sleep(3)
     content = driver.page_source
-    soup = BeautifulSoup(content,features="lxml")
+    soup = BeautifulSoup(content, features="lxml")
 
+    elems = driver.find_elements_by_xpath("//a[@href]")
+    for elem in elems:
+        url.append(elem.get_attribute("href"))
+    url1 = url[14:38]
 
     for a in soup.findAll('a', href=True, attrs={'class': '_1fQZEK'}):
         name = a.find('div', attrs={'class': '_4rR01T'})
@@ -125,14 +126,14 @@ def search_amazon():
         ratings.append(rating.text)
 
     # Storing scraped content
-    foutput = pd.DataFrame({'Product Name': products, 'Price': prices, 'Rating': ratings, 'Source': 'Flipkart'})
+    foutput = pd.DataFrame({'Product Name': products, 'Price': prices, 'Rating': ratings, 'Source': 'Flipkart', 'URL': url1})
     foutput = foutput.head(numProd // 2 + 1)
     foutput.to_csv('foutput.csv', index=False, encoding='utf-8')
     driver.quit()
     data1 = pd.read_csv('aoutput.csv')
     data2 = pd.read_csv('foutput.csv')
     final_op = pd.concat([data1, data2], axis=0)
-    final_op.to_excel('final_op.xlsx')
+    final_op.to_excel('final_op.xlsx', index=False)
     exit(0)
 
 
