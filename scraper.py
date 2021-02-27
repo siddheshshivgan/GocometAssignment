@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
+
+from bs4 import BeautifulSoup
 from selenium.webdriver.common.keys import Keys
 from fake_useragent import UserAgent
 from selenium.webdriver.chrome.options import Options
@@ -20,7 +22,7 @@ def search_amazon():
     maxR = maxEntry.get()
     minR = minEntry.get()
     pin = PincodeEntry.get()
-    options=Options()
+    options = Options()
     ua = UserAgent()
     userAgent = ua.random
     options.add_argument(f'user-agent={userAgent}')
@@ -35,7 +37,7 @@ def search_amazon():
     search_box = driver.find_element_by_id('twotabsearchtextbox').send_keys(prodName)
     driver.implicitly_wait(3)
     search_button = driver.find_element_by_id("nav-search-submit-text").click()
-    driver.implicitly_wait(5)
+    time.sleep(5)
 
     # try:
     #     num_page = driver.find_element_by_xpath('//*[@class="a-pagination"]/li[6]')
@@ -46,19 +48,19 @@ def search_amazon():
     # SORT
     if sortBy != 'Featured':
         sort_drop = driver.find_element_by_class_name('a-dropdown-label').click()
-        time.sleep(1)
+        time.sleep(2)
         if sortBy == 'Price: Low to High':
             sort = driver.find_element_by_xpath(
                 ("//li[@class='a-dropdown-item']/a[@id='s-result-sort-select_1']")).click()
-            time.sleep(2)
+            time.sleep(3)
         elif sortBy == 'Price: High to Low':
             sort = driver.find_element_by_xpath(
                 ("//li[@class='a-dropdown-item']/a[@id='s-result-sort-select_2']")).click()
-            time.sleep(2)
+            time.sleep(3)
         elif sortBy == 'Newest Arrivals':
             sort = driver.find_element_by_xpath(
                 ("//li[@class='a-dropdown-item']/a[@id='s-result-sort-select_4']")).click()
-            time.sleep(2)
+            time.sleep(3)
     else:
         pass
     # MAX-MIN
@@ -66,15 +68,14 @@ def search_amazon():
         set_min = driver.find_element_by_id('low-price').send_keys(minR)
         set_max = driver.find_element_by_id('high-price').send_keys(maxR)
         driver.find_element_by_id('high-price').send_keys(Keys.ENTER)
+        time.sleep(3)
 
     url_list = []
     for i in range(int(3)):
         page_ = i + 1
         url_list.append(driver.current_url)
-        driver.implicitly_wait(5)
         click_next = driver.find_element_by_class_name('a-last').click()
-        driver.implicitly_wait(1)
-        time.sleep(1)
+        time.sleep(3)
         print("Page " + str(page_) + " grabbed")
     with open('search_results_urls.txt', 'w') as filehandle:
         for result_page in url_list:
@@ -88,37 +89,52 @@ def search_amazon():
             data = scrape(url)
             if data:
                 for product in data['products']:
-                    product['search_url'] = url
-                    product['source'] = 'Amazon'
+                    temp = {
+                        'Product Name': product['title'],
+                        'Price': product['price'],
+                        'Rating': product['rating'],
+                        'Source': 'Amazon',
+                        # 'URL': 'https://www.amazon.in/'+product['url']
+                    }
                     print("Saving Product: %s" % product['title'].encode('utf8'))
-                    alldetails.append(product)
+                    alldetails.append(temp)
         pd.DataFrame(alldetails)
         aoutput = pd.DataFrame(alldetails)
-        aoutput = aoutput.head(numProd//2)
+        aoutput = aoutput.head(numProd // 2)
+        aoutput.to_csv('aoutput.csv', index=False)
 
+    products, prices, ratings = [], [], []
     driver.get('https://www.flipkart.com/')
     close = driver.find_element_by_xpath('/html/body/div[2]/div/div/button').click()
+    time.sleep(1)
     fsearch_box = driver.find_element_by_class_name('_3704LK').send_keys(prodName)
-    driver.implicitly_wait(3)
-    fsearch_button = driver.find_element_by_xpath('//*[@id="container"]/div/div[1]/div[1]/div[2]/div[2]/form/div/button').click()
-    driver.implicitly_wait(5)
-    cur_url = driver.current_url
-    driver.quit()
-    alldetails = []
-    data = scrape(cur_url)
-    if data:
-        for product in data['products']:
-            product['search_url'] = url
-            product['source'] = 'Amazon'
-            print("Saving Product: %s" % product['title'].encode('utf8'))
-            alldetails.append(product)
-    pd.DataFrame(alldetails)
-    foutput = pd.DataFrame(alldetails)
-    foutput = foutput.head(numProd // 2)
-    output = pd.concat([aoutput, foutput], ignore_index=True, sort=False)
-    output.to_excel('result.xlsx')
+    time.sleep(1)
+    fsearch_button = driver.find_element_by_xpath(
+        '//*[@id="container"]/div/div[1]/div[1]/div[2]/div[2]/form/div/button').click()
+    time.sleep(3)
+    content = driver.page_source
+    soup = BeautifulSoup(content,features="lxml")
 
+
+    for a in soup.findAll('a', href=True, attrs={'class': '_1fQZEK'}):
+        name = a.find('div', attrs={'class': '_4rR01T'})
+        price = a.find('div', attrs={'class': '_30jeq3 _1_WHN1'})
+        rating = a.find('div', attrs={'class': '_3LWZlK'})
+        products.append(name.text)
+        prices.append(price.text)
+        ratings.append(rating.text)
+
+    # Storing scraped content
+    foutput = pd.DataFrame({'Product Name': products, 'Price': prices, 'Rating': ratings, 'Source': 'Flipkart'})
+    foutput = foutput.head(numProd // 2 + 1)
+    foutput.to_csv('foutput.csv', index=False, encoding='utf-8')
+    driver.quit()
+    data1 = pd.read_csv('aoutput.csv')
+    data2 = pd.read_csv('foutput.csv')
+    final_op = pd.concat([data1, data2], axis=0)
+    final_op.to_excel('final_op.xlsx')
     exit(0)
+
 
 def scrape(url):
     headers = {
